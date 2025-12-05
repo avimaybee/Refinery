@@ -1,11 +1,32 @@
 import * as vscode from 'vscode';
 import { buildPrompt } from '../llm/promptBuilder';
-import { ensureApiKey, streamFromGemini } from '../llm/geminiClient';
+import { ensureApiKey, streamFromGemini, getModel } from '../llm/geminiClient';
+import { getProjectContext } from '../context/projectScanner';
+import { getActiveFileContext } from '../context/fileUtils';
+import { getCacheManager } from '../utils/cacheManager';
+import { validateTokenCount } from '../utils/tokenCounter';
+import { RefineryError, ErrorType } from '../utils/errors';
+import { logger } from '../utils/logger';
+import { getTargetModel, setTargetModel, clearTargetModel, TargetModel } from '../utils/modelDetector';
 
 /**
  * Chat participant ID
  */
 const PARTICIPANT_ID = 'refinery.refine';
+
+/**
+ * Helpful tips shown periodically
+ */
+const TIPS = [
+    '💡 **Tip:** Use `/target Claude` to optimize prompts for Claude.',
+    '💡 **Tip:** Press `Ctrl+Shift+R` to refine selected text instantly!',
+    '💡 **Tip:** Open the Dashboard with `Ctrl+Alt+R` to view stats.',
+    '💡 **Tip:** Refinery automatically detects your project\'s framework.',
+    '💡 **Tip:** Use `@refine /help` to see all available commands.',
+    '💡 **Tip:** Your refined prompts are cached for faster reuse.',
+    '💡 **Tip:** Check logs with `Refinery: Show Logs` if issues occur.',
+    '💡 **Tip:** Prompts refined for specific AIs (Claude, GPT-4) work better!',
+];
 
 /**
  * Chat participant handler
@@ -17,38 +38,48 @@ async function chatHandler(
     token: vscode.CancellationToken
 ): Promise<vscode.ChatResult> {
     const userInput = request.prompt;
+    const startTime = Date.now();
 
-    // Handle slash commands
+    // Handle /help command
     if (request.command === 'help') {
-        stream.markdown('## 🔧 Refinery\n\n');
-        stream.markdown('**Refine vague ideas into production-ready prompts.**\n\n');
-        stream.markdown('Stop wasting API quota on follow-up prompts. Refinery enhances your requests so AI agents understand exactly what you need — the first time.\n\n');
-        stream.markdown('---\n\n');
-        stream.markdown('### How It Works\n\n');
-        stream.markdown('1. Type `@refine` followed by your vague request\n');
-        stream.markdown('2. Get a comprehensive, task-oriented prompt\n');
-        stream.markdown('3. Copy and paste into your AI agent\n\n');
-        stream.markdown('---\n\n');
-        stream.markdown('### Examples\n\n');
-        stream.markdown('| You Type | What You Get |\n');
-        stream.markdown('|----------|-------------|\n');
-        stream.markdown('| `make it look better` | Detailed visual improvements with specific values |\n');
-        stream.markdown('| `add dark mode` | Complete implementation tasks with edge cases |\n');
-        stream.markdown('| `fix the form` | Validation, UX, and accessibility requirements |\n');
-        stream.markdown('| `make it premium` | Glassmorphism, animations, and design tokens |\n\n');
-        stream.markdown('---\n\n');
-        stream.markdown('### Settings\n\n');
-        stream.markdown('- **API Key**: Run `Refinery: Set API Key` command\n');
-        stream.markdown('- **Model**: Settings → Extensions → Refinery\n\n');
-        stream.markdown('*Powered by Gemini with Google Search for latest best practices.*\n');
+        showHelpMessage(stream);
+        return {};
+    }
+
+    // Handle /target command - set target AI model
+    if (request.command === 'target') {
+        if (!userInput.trim()) {
+            const current = getTargetModel();
+            if (current) {
+                stream.markdown(`**Current target:** ${current.name}\n\n`);
+                stream.markdown('To change: `@refine /target Claude 3.5 Sonnet`\n');
+                stream.markdown('To clear: `@refine /target clear`');
+            } else {
+                stream.markdown('**No target model set.**\n\n');
+                stream.markdown('Set one: `@refine /target Claude 3.5 Sonnet`\n\n');
+                stream.markdown('This helps optimize the refined prompt for your specific AI.');
+            }
+            return {};
+        }
+
+        if (userInput.trim().toLowerCase() === 'clear') {
+            clearTargetModel();
+            stream.markdown('✅ Target model cleared.');
+            return {};
+        }
+
+        setTargetModel(userInput.trim());
+        stream.markdown(`✅ Target set to: **${userInput.trim()}**\n\n`);
+        stream.markdown('Refined prompts will now be optimized for this model.');
         return {};
     }
 
     if (!userInput.trim()) {
-        stream.markdown('Type your vague prompt and I\'ll refine it for your AI agent.\n\n');
+        stream.markdown('Type your vague prompt and I\'ll refine it.\n\n');
         stream.markdown('**Try:**\n');
         stream.markdown('- `@refine make it look better`\n');
-        stream.markdown('- `@refine add dark mode`\n');
+        stream.markdown('- `@refine add dark mode`\n\n');
+        stream.markdown('**Tip:** Use `/target` to set your AI model for optimized prompts.');
         return {};
     }
 
@@ -63,30 +94,82 @@ async function chatHandler(
     }
 
     try {
-        // Loading indicators
-        stream.progress('🔍 Analyzing your request...');
+        stream.progress('🔧 Refining your prompt...');
 
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Get target model (user-specified)
+        const targetModel = getTargetModel();
+
+        // Gather project context
+        const projectContext = await getProjectContext();
+        const fileContext = await getActiveFileContext();
 
         if (token.isCancellationRequested) {
             return {};
         }
 
-        stream.progress('🔧 Refining prompt with Gemini...');
+        // Build the full prompt
+        const fullPrompt = buildPrompt(userInput, targetModel, projectContext, fileContext || undefined);
+        const currentGeminiModel = getModel();
 
-        const targetModel = null;
-        const prompt = buildPrompt(userInput, targetModel);
+        // Validate token count
+        const tokenValidation = validateTokenCount(fullPrompt, currentGeminiModel);
 
-        // Stream the refined prompt
+        if (!tokenValidation.isValid) {
+            stream.markdown(`⚠️ **${tokenValidation.error}**\n\n`);
+            stream.markdown('Try shortening your prompt.');
+            return {};
+        }
+
+        // Check cache
+        const cacheManager = getCacheManager();
+        const contextHash = JSON.stringify({
+            project: projectContext?.framework,
+            target: targetModel?.name,
+        });
+        const cacheKey = cacheManager.hash(userInput, currentGeminiModel, contextHash);
+        const cachedResult = cacheManager.get(cacheKey);
+
+        if (cachedResult) {
+            logger.logCache('hit', cacheKey);
+            stream.markdown('### 🔧 Refined Prompt ✨ *cached*\n\n');
+            stream.markdown('```\n');
+            stream.markdown(cachedResult);
+            stream.markdown('\n```\n\n');
+
+            showContextInfo(stream, targetModel, projectContext?.framework);
+
+            stream.button({
+                command: 'refinery.copyToClipboard',
+                arguments: [cachedResult.trim()],
+                title: '📋 Copy Prompt',
+            });
+            
+            // Record refinement for tips
+            logger.incrementRefinement();
+
+            return { metadata: { cached: true } };
+        }
+
+        logger.logCache('miss', cacheKey);
+
+        // Stream the refined prompt with progress tracking
         let refinedPrompt = '';
         let isFirstChunk = true;
+        let chunkCount = 0;
 
-        for await (const chunk of streamFromGemini(prompt, apiKey)) {
+        // Progress callback for streaming
+        const onProgress = (chars: number) => {
+            chunkCount++;
+            if (chunkCount % 5 === 0) { // Update every 5 chunks
+                stream.progress(`🔧 Generating... ${chars} characters`);
+            }
+        };
+
+        for await (const chunk of streamFromGemini(fullPrompt, apiKey, onProgress)) {
             if (token.isCancellationRequested) {
                 break;
             }
 
-            // Show header on first chunk
             if (isFirstChunk) {
                 stream.markdown('### 🔧 Refined Prompt\n\n');
                 stream.markdown('```\n');
@@ -101,22 +184,145 @@ async function chatHandler(
             stream.markdown('\n```\n\n');
         }
 
-        // Copy button
+        // Cache the result
+        if (refinedPrompt.trim()) {
+            cacheManager.set(cacheKey, refinedPrompt.trim(), currentGeminiModel, userInput.length);
+            logger.logCache('set', cacheKey);
+        }
+
+        showContextInfo(stream, targetModel, projectContext?.framework);
+
         stream.button({
             command: 'refinery.copyToClipboard',
             arguments: [refinedPrompt.trim()],
             title: '📋 Copy Prompt',
         });
 
-        return {
-            metadata: { refinedPrompt: refinedPrompt.trim() },
-        };
+        const duration = Date.now() - startTime;
+        
+        // Record refinement and possibly show tip
+        logger.incrementRefinement();
+        showTipIfDue(stream);
+        
+        logger.info('refinement_complete', {
+            duration,
+            inputLength: userInput.length,
+            outputLength: refinedPrompt.length,
+            target: targetModel?.name,
+        });
+
+        return { metadata: { duration } };
     } catch (error) {
-        if (error instanceof Error) {
-            stream.markdown(`⚠️ **Error:** ${error.message}`);
-        }
-        return {};
+        return handleError(error, stream);
     }
+}
+
+/**
+ * Show a helpful tip if interval reached
+ */
+function showTipIfDue(stream: vscode.ChatResponseStream): void {
+    const config = vscode.workspace.getConfiguration('refinery');
+    const showTips = config.get<boolean>('showTips', true);
+    
+    if (!showTips) {
+        return;
+    }
+    
+    const interval = config.get<number>('tipsInterval', 5);
+    const stats = logger.getStats();
+    
+    if (stats.refinements > 0 && stats.refinements % interval === 0) {
+        const tipIndex = Math.floor(stats.refinements / interval) % TIPS.length;
+        stream.markdown(`\n---\n\n${TIPS[tipIndex]}\n`);
+    }
+}
+
+/**
+ * Show help message
+ */
+function showHelpMessage(stream: vscode.ChatResponseStream): void {
+    stream.markdown('## 🔧 Refinery\n\n');
+    stream.markdown('**Refine vague requests into clear, outcome-focused prompts.**\n\n');
+    stream.markdown('---\n\n');
+    stream.markdown('### Commands\n\n');
+    stream.markdown('| Command | Description |\n');
+    stream.markdown('|---------|-------------|\n');
+    stream.markdown('| `@refine [prompt]` | Refine your vague prompt |\n');
+    stream.markdown('| `@refine /target [model]` | Set target AI (e.g., Claude, GPT-4) |\n');
+    stream.markdown('| `@refine /target clear` | Clear target model |\n');
+    stream.markdown('| `@refine /help` | Show this help |\n\n');
+    stream.markdown('---\n\n');
+    stream.markdown('### Keyboard Shortcuts\n\n');
+    stream.markdown('| Shortcut | Action |\n');
+    stream.markdown('|----------|--------|\n');
+    stream.markdown('| `Ctrl+Shift+R` | Refine selected text |\n');
+    stream.markdown('| `Ctrl+Alt+R` | Open Dashboard |\n\n');
+    stream.markdown('---\n\n');
+    stream.markdown('### Examples\n\n');
+    stream.markdown('```\n');
+    stream.markdown('@refine make it look better\n');
+    stream.markdown('@refine add dark mode\n');
+    stream.markdown('@refine /target Claude 3.5 Sonnet\n');
+    stream.markdown('```\n\n');
+    stream.markdown('---\n\n');
+    stream.markdown('### Settings\n\n');
+    stream.markdown('- `Refinery: Set API Key` - Store your Gemini API key\n');
+    stream.markdown('- `Refinery: Select Model` - Choose Gemini model\n');
+    stream.markdown('- `Refinery: Show Logs` - View logs\n');
+    stream.markdown('- `Refinery: Open Dashboard` - View stats and quick actions\n');
+}
+
+/**
+ * Show context information
+ */
+function showContextInfo(
+    stream: vscode.ChatResponseStream,
+    targetModel: TargetModel | null,
+    framework: string | null | undefined
+): void {
+    const parts: string[] = [];
+
+    if (targetModel) {
+        parts.push(`🎯 Target: **${targetModel.name}**`);
+    }
+
+    if (framework) {
+        parts.push(`📁 Project: **${framework}**`);
+    }
+
+    if (parts.length > 0) {
+        stream.markdown(`*${parts.join(' • ')}*\n\n`);
+    }
+}
+
+/**
+ * Handle errors
+ */
+function handleError(error: unknown, stream: vscode.ChatResponseStream): vscode.ChatResult {
+    if (error instanceof RefineryError) {
+        stream.markdown(error.getUserMessage());
+
+        if (error.type === ErrorType.AUTH) {
+            stream.button({
+                command: 'refinery.setApiKey',
+                title: '🔑 Update API Key',
+            });
+        }
+
+        logger.error('refinement_error', {
+            type: error.type,
+            message: error.message,
+        });
+
+        return { metadata: { error: error.type } };
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    stream.markdown(`⚠️ **Error:** ${message}`);
+
+    logger.error('refinement_error', { message });
+
+    return { metadata: { error: 'UNKNOWN' } };
 }
 
 /**
@@ -130,7 +336,8 @@ export function registerChatParticipant(context: vscode.ExtensionContext): void 
     context.subscriptions.push(
         vscode.commands.registerCommand('refinery.copyToClipboard', async (text: string) => {
             await vscode.env.clipboard.writeText(text);
-            vscode.window.showInformationMessage('🔧 Prompt copied! Paste it in your AI chat.');
+            vscode.window.showInformationMessage('🔧 Prompt copied!');
+            logger.info('prompt_copied', { length: text.length });
         })
     );
 }

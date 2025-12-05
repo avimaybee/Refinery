@@ -8,7 +8,7 @@
   "icon": "icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/YOUR_USERNAME/refinery"
+    "url": "https://github.com/avimaybee/refinery"
   },
   "engines": {
     "vscode": "^1.85.0"
@@ -42,6 +42,10 @@
           {
             "name": "help",
             "description": "Show help and examples"
+          },
+          {
+            "name": "target",
+            "description": "Set target AI model (e.g., Claude, GPT-4)"
           }
         ]
       }
@@ -49,7 +53,51 @@
     "commands": [
       {
         "command": "refinery.setApiKey",
-        "title": "Refinery: Set API Key"
+        "title": "Refinery: Set API Key",
+        "icon": "$(key)"
+      },
+      {
+        "command": "refinery.selectModel",
+        "title": "Refinery: Select Model",
+        "icon": "$(hubot)"
+      },
+      {
+        "command": "refinery.showLogs",
+        "title": "Refinery: Show Logs",
+        "icon": "$(output)"
+      },
+      {
+        "command": "refinery.exportLogs",
+        "title": "Refinery: Export Logs",
+        "icon": "$(export)"
+      },
+      {
+        "command": "refinery.clearLogs",
+        "title": "Refinery: Clear Logs",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "refinery.showDashboard",
+        "title": "Refinery: Open Dashboard",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "refinery.refineSelection",
+        "title": "Refinery: Refine Selection",
+        "icon": "$(sparkle)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "refinery.refineSelection",
+        "key": "ctrl+shift+r",
+        "mac": "cmd+shift+r",
+        "when": "editorTextFocus && editorHasSelection"
+      },
+      {
+        "command": "refinery.showDashboard",
+        "key": "ctrl+alt+r",
+        "mac": "cmd+alt+r"
       }
     ],
     "configuration": {
@@ -58,24 +106,74 @@
         "refinery.apiKey": {
           "type": "string",
           "default": "",
-          "description": "Your Google AI Studio API key. Get one at https://aistudio.google.com/apikey"
+          "description": "Your Google AI Studio API key. Get one at https://aistudio.google.com/apikey",
+          "markdownDescription": "Your **Google AI Studio** API key. [Get one here](https://aistudio.google.com/apikey)."
         },
         "refinery.model": {
           "type": "string",
           "default": "gemini-2.5-flash",
+          "description": "Gemini model name to use. Run 'Refinery: Select Model' to see available models.",
           "enum": [
             "gemini-2.5-flash",
-            "gemini-2.5-flash-lite",
-            "gemini-2.5-pro",
-            "gemini-3-pro-preview"
+            "gemini-2.0-flash",
+            "gemini-1.5-pro",
+            "gemini-1.5-flash"
           ],
           "enumDescriptions": [
-            "Gemini 2.5 Flash - Fast and capable (default)",
-            "Gemini 2.5 Flash Lite - Lightweight and fast",
-            "Gemini 2.5 Pro - Most capable model",
-            "Gemini 3 Pro Preview - Latest preview model"
+            "Gemini 2.5 Flash - Latest fast model (recommended)",
+            "Gemini 2.0 Flash - Fast and capable",
+            "Gemini 1.5 Pro - Most capable, larger context",
+            "Gemini 1.5 Flash - Fast and efficient"
+          ]
+        },
+        "refinery.logLevel": {
+          "type": "string",
+          "default": "INFO",
+          "enum": [
+            "SILENT",
+            "ERROR",
+            "WARN",
+            "INFO",
+            "DEBUG"
           ],
-          "description": "Gemini model to use for prompt refinement"
+          "enumDescriptions": [
+            "No logging output",
+            "Only error messages",
+            "Errors and warnings",
+            "Standard logging (recommended)",
+            "Verbose debugging information"
+          ],
+          "description": "Controls the verbosity of Refinery logging output.",
+          "markdownDescription": "Controls the **verbosity** of Refinery logging. Set to `DEBUG` for troubleshooting."
+        },
+        "refinery.cacheSize": {
+          "type": "number",
+          "default": 50,
+          "minimum": 10,
+          "maximum": 500,
+          "description": "Maximum number of refined prompts to cache (LRU eviction).",
+          "markdownDescription": "Maximum number of refined prompts to **cache**. Uses LRU (Least Recently Used) eviction."
+        },
+        "refinery.cacheTTL": {
+          "type": "number",
+          "default": 3600000,
+          "minimum": 60000,
+          "description": "Cache time-to-live in milliseconds (default: 1 hour).",
+          "markdownDescription": "Cache **TTL** (time-to-live) in milliseconds. Default: 1 hour (3600000ms)."
+        },
+        "refinery.showTips": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show helpful tips after refinements.",
+          "markdownDescription": "Show **helpful tips** periodically after refinements."
+        },
+        "refinery.tipsInterval": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 20,
+          "description": "Show a tip every N refinements.",
+          "markdownDescription": "Show a tip every **N** refinements."
         }
       }
     }
