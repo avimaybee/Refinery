@@ -1,0 +1,103 @@
+{
+  "name": "refinery",
+  "displayName": "Refinery",
+  "description": "Refine vague ideas into production-ready prompts for AI coding agents",
+  "version": "0.1.0",
+  "publisher": "avimaybe7",
+  "license": "MIT",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_USERNAME/refinery"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "prompt",
+    "ai",
+    "gemini",
+    "refine",
+    "llm",
+    "copilot",
+    "prompt engineering"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "chatParticipants": [
+      {
+        "id": "refinery.refine",
+        "name": "refine",
+        "fullName": "Refinery",
+        "description": "Refine your vague prompts for AI coding agents",
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "help",
+            "description": "Show help and examples"
+          }
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "refinery.setApiKey",
+        "title": "Refinery: Set API Key"
+      }
+    ],
+    "configuration": {
+      "title": "Refinery",
+      "properties": {
+        "refinery.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Your Google AI Studio API key. Get one at https://aistudio.google.com/apikey"
+        },
+        "refinery.model": {
+          "type": "string",
+          "default": "gemini-2.5-flash",
+          "enum": [
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",
+            "gemini-2.5-pro",
+            "gemini-3-pro-preview"
+          ],
+          "enumDescriptions": [
+            "Gemini 2.5 Flash - Fast and capable (default)",
+            "Gemini 2.5 Flash Lite - Lightweight and fast",
+            "Gemini 2.5 Pro - Most capable model",
+            "Gemini 3 Pro Preview - Latest preview model"
+          ],
+          "description": "Gemini model to use for prompt refinement"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "@vscode/vsce": "^2.22.0",
+    "eslint": "^8.54.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0"
+  }
+}

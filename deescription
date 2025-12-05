@@ -1,0 +1,111 @@
+Product Requirements Document (PRD): PromptForge (VS Code Extension)
+1. Project Overview
+Name: PromptForge
+Type: VS Code Extension
+Core Value: A "Staging Area" for Vibe Coding. It transforms vague, short-form user intent (e.g., "make this premium") into high-fidelity, context-aware engineering prompts directly within the IDE, utilizing the user's project context (tech stack, file structure).
+2. Technical Architecture & Stack
+Language: TypeScript (Strict mode).
+Runtime: Node.js (VS Code Extension Host).
+Key APIs:
+vscode.lm: To access models (Copilot/GPT-4) without external API keys.
+vscode.chat: To register the @promptforge chat participant.
+vscode.languages.registerCodeLensProvider: For the "Magic Comment" feature.
+vscode.workspace.fs: For reading package.json and file context.
+State Management: Minimal local state; relies on VS Code's active editor context.
+3. Core Features & Implementation Logic
+Feature A: The "Magic Comment" (CodeLens)
+User Flow:
+User types a comment in the editor: // pf: make the header look like Linear.app
+Extension detects the // pf: prefix.
+A CodeLens appears above the line: ✨ Forge Prompt.
+User clicks the CodeLens.
+Action: The extension reads the current file content + project context, sends it to the LLM, and replaces the comment with a detailed block comment containing the refined spec.
+Technical Specs:
+Regex Pattern: ^(\s*)(\/\/|#|<!--)\s*pf:\s*(.*)$ (Supports JS/TS, Python, HTML).
+Output Format: A JSDoc/Block comment containing:
+Objective: Clear technical goal.
+Tech Stack: Enforced constraints (e.g., "Use Tailwind CSS").
+Styling: Specific design tokens.
+Feature B: The Chat Participant (@promptforge)
+User Flow:
+User opens GitHub Copilot Chat.
+User types: @promptforge fix the auth bug in this file.
+Action: The extension intercepts the request, enriches it with context, generates a "Mega-Prompt," and displays it to the user with a button.
+User clicks "Use Prompt".
+A new chat session starts with the perfected prompt auto-filled.
+Feature C: Context Engine (The "Brain")
+Before generating any prompt, the extension must build a ContextObject.
+Logic:
+Tech Stack Detection: Read package.json (if JS/TS) or requirements.txt (if Python).
+If tailwindcss found 
+→
+→
+ Context: "Strictly use Tailwind CSS utility classes."
+If framer-motion found 
+→
+→
+ Context: "Use Framer Motion for animations."
+If shadcn-ui found 
+→
+→
+ Context: "Use Shadcn/UI components."
+File Context: Capture the relative path and filename of the active editor.
+4. System Prompts (For the LLM)
+Note to Agent: Use the following system prompt logic when calling vscode.lm.
+Role: You are a Senior Principal Engineer and UI/UX Architect.
+Input:
+User Vibe: [User's raw input]
+File Context: [Active file code snippet]
+Project Stack: [Detected libraries from Context Engine]
+Task: Rewrite the "User Vibe" into a highly technical, deterministic prompt suitable for an LLM coding agent.
+Constraints:
+Do not write code. Write instructions for writing code.
+Be specific about libraries (from Project Stack).
+If design is mentioned, map "vibes" to concrete CSS/Design tokens (e.g., "Premium" = "Glassmorphism, excessive padding, subtle borders").
+Output must be plain text (or markdown block), ready to be pasted.
+5. Development Steps (Agent Instructions)
+Step 1: Project Scaffolding
+Initialize a new VS Code extension (yo code).
+Update package.json:
+engines: ^1.85.0 (Ensure compatibility with Chat API).
+activationEvents: ["onStartupFinished"] (for CodeLens).
+contributes.chatParticipants: Register promptforge.refine.
+Step 2: Implement Context Engine (src/context.ts)
+Create a function getProjectContext():
+Locate root workspace folder.
+Try to read package.json.
+Return a string summary of key dependencies.
+Step 3: Implement CodeLens Provider (src/codelens.ts)
+Class PromptForgeCodeLensProvider implements vscode.CodeLensProvider.
+provideCodeLenses: Regex scan document for // pf:. Return CodeLens with command promptforge.triggerInline.
+Command promptforge.triggerInline:
+Get document and range.
+Call vscode.lm.sendRequest with the System Prompt + User Text + Context.
+Use WorkspaceEdit to replace the single line comment with the generated block comment.
+Step 4: Implement Chat Participant (src/chat.ts)
+Register handler for @promptforge.
+Call vscode.lm to refine the prompt.
+Stream response using stream.markdown().
+Add a button using stream.button() that triggers workbench.action.chat.open with the query set to the refined prompt.
+6. Edge Case Handling
+No "Copilot" Access: If vscode.lm.selectChatModels returns empty (user has no LLM access), show a toast error: "PromptForge requires GitHub Copilot or a compatible LLM extension."
+Large Files: If active file > 2000 lines, only send the first 100 lines and the surrounding 50 lines of the cursor as context to save token costs.
+JSON Parsing: Do not trust the LLM to output valid JSON. Request Markdown or Plain Text.
+7. Desired File Structure
+code
+Text
+src/
+├── extension.ts        // Entry point, activates providers
+├── context/
+│   ├── projectScanner.ts // Reads package.json/requirements.txt
+│   └── fileUtils.ts      // Reads active file content
+├── features/
+│   ├── codeLensProvider.ts // Handles // pf: logic
+│   └── chatParticipant.ts  // Handles @promptforge logic
+└── llm/
+    └── promptBuilder.ts    // Constructs the System Prompt sent to vscode.lm
+8. Final Deliverable
+A fully functioning VS Code extension that:
+Detects // pf: and replaces it with a pro-level spec.
+Responds to @promptforge in the chat sidebar.
+Automatically detects if I am using Tailwind/React/Python and adds that constraint to the generated prompt.
