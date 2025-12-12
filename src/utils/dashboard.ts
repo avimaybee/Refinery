@@ -421,6 +421,15 @@ export class DashboardPanel {
         </div>
     </div>
 
+    <div class="tip" style="margin-top: 16px;">
+        <div class="tip-title">📚 Built on Research</div>
+        <div class="tip-content">
+            Refinery's prompts are engineered using best practices from 
+            <a href="https://www.anthropic.com/engineering/claude-code-best-practices" style="color: var(--accent);">Anthropic's Claude Code research</a> 
+            and <a href="https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/claude-4-best-practices" style="color: var(--accent);">Claude 4 prompt engineering guidelines</a>.
+        </div>
+    </div>
+
     <script>
         const vscode = acquireVsCodeApi();
         

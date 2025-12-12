@@ -3,6 +3,8 @@ import { registerChatParticipant } from './features/chatParticipant';
 import { initializeGeminiClient, promptForApiKey, selectModel } from './llm/geminiClient';
 import { logger } from './utils/logger';
 import { DashboardPanel } from './utils/dashboard';
+import { getHistoryManager, HistoryTreeProvider, HistoryEntry } from './utils/historyManager';
+import { PROMPT_TEMPLATES, getTemplateCategories } from './utils/templates';
 
 /**
  * Extension activation
@@ -10,60 +12,53 @@ import { DashboardPanel } from './utils/dashboard';
 export function activate(context: vscode.ExtensionContext): void {
     console.log('Refinery is now active!');
 
-    // Initialize logger (creates OutputChannel and status bar)
+    // Initialize logger
     logger.initialize(context);
 
-    // Initialize Gemini client with extension context (for SecretStorage)
+    // Initialize Gemini client
     initializeGeminiClient(context);
 
-    // Register the chat participant (@refine)
+    // Initialize history manager
+    const historyManager = getHistoryManager();
+    historyManager.initialize(context);
+
+    // Register the chat participant
     registerChatParticipant(context);
 
-    // Register the set API key command
-    context.subscriptions.push(
-        vscode.commands.registerCommand('refinery.setApiKey', promptForApiKey)
+    // Create status bar item
+    const statusBar = vscode.window.createStatusBarItem(
+        vscode.StatusBarAlignment.Right,
+        100
     );
+    statusBar.text = '$(tools) Refinery';
+    statusBar.tooltip = 'Open Refinery Dashboard';
+    statusBar.command = 'refinery.showDashboard';
+    statusBar.show();
+    context.subscriptions.push(statusBar);
 
-    // Register the select model command
-    context.subscriptions.push(
-        vscode.commands.registerCommand('refinery.selectModel', selectModel)
-    );
+    // Register history tree view
+    const historyTreeProvider = new HistoryTreeProvider();
+    vscode.window.registerTreeDataProvider('refinery.history', historyTreeProvider);
 
-    // Register show logs command
+    // Register commands
     context.subscriptions.push(
-        vscode.commands.registerCommand('refinery.showLogs', () => {
-            logger.show();
-        })
-    );
-
-    // Register export logs command
-    context.subscriptions.push(
+        vscode.commands.registerCommand('refinery.setApiKey', promptForApiKey),
+        vscode.commands.registerCommand('refinery.selectModel', selectModel),
+        vscode.commands.registerCommand('refinery.showLogs', () => logger.show()),
         vscode.commands.registerCommand('refinery.exportLogs', async () => {
             const filePath = await logger.exportLogs();
             if (filePath) {
                 const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
                 await vscode.window.showTextDocument(doc);
             }
-        })
-    );
-
-    // Register clear logs command
-    context.subscriptions.push(
+        }),
         vscode.commands.registerCommand('refinery.clearLogs', () => {
             logger.clearLogs();
-            vscode.window.showInformationMessage('Refinery logs cleared!');
-        })
-    );
-
-    // Register dashboard command
-    context.subscriptions.push(
+            vscode.window.setStatusBarMessage('Logs cleared', 3000);
+        }),
         vscode.commands.registerCommand('refinery.showDashboard', () => {
             DashboardPanel.createOrShow(context.extensionUri);
-        })
-    );
-
-    // Register refine selection command (keyboard shortcut)
-    context.subscriptions.push(
+        }),
         vscode.commands.registerCommand('refinery.refineSelection', async () => {
             const editor = vscode.window.activeTextEditor;
             if (!editor) {
@@ -79,28 +74,70 @@ export function activate(context: vscode.ExtensionContext): void {
                 return;
             }
 
-            // Open Copilot Chat with @refine and the selected text
-            // Use the VS Code command to open the chat panel with pre-filled text
             await vscode.commands.executeCommand('workbench.action.chat.open', {
                 query: `@refine ${selectedText}`
             });
 
-            logger.info('refine_selection_triggered', { 
+            logger.info('refine_selection_triggered', {
                 textLength: selectedText.length,
                 file: editor.document.fileName
+            });
+        }),
+
+        // History commands
+        vscode.commands.registerCommand('refinery.showHistory', () => {
+            vscode.commands.executeCommand('refinery.history.focus');
+        }),
+        vscode.commands.registerCommand('refinery.clearHistory', () => {
+            historyManager.clear();
+            vscode.window.setStatusBarMessage('History cleared', 3000);
+        }),
+        vscode.commands.registerCommand('refinery.copyHistoryEntry', async (entry: HistoryEntry) => {
+            if (entry?.refinedPrompt) {
+                await vscode.env.clipboard.writeText(entry.refinedPrompt);
+                vscode.window.setStatusBarMessage('Prompt copied to clipboard', 4000);
+            }
+        }),
+
+        // Templates command
+        vscode.commands.registerCommand('refinery.showTemplates', async () => {
+            const categories = getTemplateCategories();
+            const categoryPick = await vscode.window.showQuickPick(
+                categories.map(c => ({
+                    label: c.label,
+                    description: `${PROMPT_TEMPLATES.filter(t => t.category === c.id).length} templates`,
+                    id: c.id
+                })),
+                { placeHolder: 'Select a template category' }
+            );
+
+            if (!categoryPick) return;
+
+            const templates = PROMPT_TEMPLATES.filter(t => t.category === categoryPick.id);
+            const templatePick = await vscode.window.showQuickPick(
+                templates.map(t => ({
+                    label: t.name,
+                    description: t.description,
+                    detail: t.template,
+                    template: t
+                })),
+                { placeHolder: 'Select a template', matchOnDetail: true }
+            );
+
+            if (!templatePick) return;
+
+            // Open chat with the template
+            await vscode.commands.executeCommand('workbench.action.chat.open', {
+                query: `@refine ${templatePick.template.template}`
             });
         })
     );
 
-    logger.info('extension_activated', { 
+    logger.info('extension_activated', {
         commandsRegistered: [
-            'setApiKey', 
-            'selectModel', 
-            'showLogs', 
-            'exportLogs', 
-            'clearLogs', 
-            'showDashboard', 
-            'refineSelection'
+            'setApiKey', 'selectModel', 'showLogs', 'exportLogs', 'clearLogs',
+            'showDashboard', 'refineSelection', 'showHistory', 'clearHistory',
+            'copyHistoryEntry', 'showTemplates'
         ]
     });
 }

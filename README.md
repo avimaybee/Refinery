@@ -6,23 +6,39 @@
 
 ## Features
 
-### 🔧 Prompt Refinement
+### Prompt Refinement
 
-Type `@refine` followed by your vague request:
+Type `@refine` followed by your request:
 
 - `@refine make it look better`
 - `@refine add dark mode`
-- `@refine fix the form`
+- `@refine create 50 features for a surreal museum`
 
 Get back a comprehensive, task-oriented prompt ready to paste into your AI agent.
 
-### ✨ Powered by Gemini
+### Powered by Gemini
 
 Uses Google's Gemini API with Google Search for the latest best practices.
 
-### 📋 One-Click Copy
+### Commands
 
-Copy the refined prompt with a single click and paste it into Copilot, Claude, or any AI assistant.
+| Command | Description |
+|---------|-------------|
+| `@refine [prompt]` | Refine your prompt |
+| `@refine /templates` | Browse prompt templates |
+| `@refine /history` | View recent refinements |
+| `@refine /help` | Show help |
+
+### History Sidebar
+
+View and re-use past refinements from the Refinery panel in the activity bar.
+
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Shift+R` | Refine selected text |
+| `Ctrl+Alt+R` | Open Dashboard |
 
 ## Getting Started
 
@@ -31,33 +47,25 @@ Copy the refined prompt with a single click and paste it into Copilot, Claude, o
 3. Run `Refinery: Set API Key` command
 4. Start refining prompts with `@refine`!
 
-## Example
-
-**You type:**
-```
-@refine make it look better
-```
-
-**You get:**
-```
-Improve the visual design of this component.
-
-Tasks:
-1. Update spacing to use consistent 16px/24px grid system
-2. Add subtle box shadows for depth
-3. Apply rounded corners (8px) to cards and buttons
-4. Ensure color contrast meets WCAG AA standards
-5. Add hover states with smooth 200ms transitions
-
-Requirements:
-- Maintain existing functionality
-- Keep responsive behavior intact
-```
-
 ## Settings
 
-- `refinery.apiKey` - Your Google AI Studio API key
 - `refinery.model` - Choose: gemini-2.5-flash (default), flash-lite, 2.5-pro, 3-pro-preview
+
+## Research Foundation
+
+Refinery's prompt engineering is based on industry-leading research:
+
+- [Anthropic's Claude Code Best Practices](https://www.anthropic.com/engineering/claude-code-best-practices)
+- [Claude 4 Prompt Engineering Guidelines](https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/claude-4-best-practices)
+
+This ensures your refined prompts follow proven patterns that work across all major AI coding agents.
+
+## What's New in v0.2.0
+
+- **History Sidebar** - View and re-use past refinements
+- **Prompt Templates** - 18 quick-start templates in 6 categories
+- **Better Prompt Handling** - Detailed prompts are preserved, not summarized
+- **Professional UI** - Cleaner, less cluttered output
 
 ## License
 

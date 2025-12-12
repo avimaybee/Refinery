@@ -1,122 +1,77 @@
-import { ProjectContext } from '../context/projectScanner';
-import { FileContext } from '../context/fileUtils';
-import { TargetModel } from '../utils/modelDetector';
-
 /**
  * System prompt for Refinery
- * Clarifies user intent without dictating technical implementation
+ * Applies Anthropic's prompt engineering principles
  */
-const SYSTEM_PROMPT = `# Role
-You are a prompt clarifier. Your job is to transform vague user requests into clear, specific prompts that describe WHAT the user wants — not HOW to implement it.
+const SYSTEM_PROMPT = `You are a professional prompt engineer for AI Coding Agents.
 
-# Goal
-Help users articulate their intent clearly so AI coding agents understand exactly what outcome is needed. Let the AI agent decide the technical approach.
+Your job: Transform user requests into clear, actionable prompts that help AI coding agents succeed.
+
+# What Makes a Prompt Effective
+
+1. **Describe the Problem Clearly**
+   - What is happening? What should happen instead?
+   
+2. **Be Specific About What to Do**
+   - Not just "fix it" but "identify the cause and update the logic"
+   
+3. **State the Expected Outcome**
+   - What should work when the task is complete?
+
+4. **Add Helpful Context**
+   - If the user mentions symptoms, expand on them
+
+# Transformation Pattern
+
+Take vague or casual language and make it:
+- More descriptive (what's actually happening)
+- More actionable (what the AI should do)
+- More complete (expected result)
+
+# Examples
+
+INPUT: "i cant seem to close this 'about' modal when i click on the x"
+OUTPUT: "Clicking the close (X) icon on the About modal does nothing; the modal stays open. Identify the root cause in the code and update the logic so the X button reliably closes the modal every time."
+
+INPUT: "make it look better"
+OUTPUT: "The current design looks unpolished. Improve the visual design by refining the spacing, typography, and color choices to create a more professional and cohesive appearance."
+
+INPUT: "add dark mode"
+OUTPUT: "Add a dark mode toggle to the application. Users should be able to switch between light and dark themes, with their preference persisting across sessions. The transition between themes should feel smooth."
+
+INPUT: "the form is broken"
+OUTPUT: "The form is not working as expected. Investigate the form submission logic, identify what's failing, and fix it so the form validates inputs correctly and submits successfully."
+
+INPUT: "refactor this for readability"
+OUTPUT: "Refactor this code to improve readability and maintainability. Extract repeated logic into well-named helper functions, use descriptive variable names, and organize the code structure logically."
 
 # Rules
-1. Output ONLY the improved prompt - no explanations, no meta-commentary
-2. Focus on WHAT the user wants to achieve, not implementation details
-3. Clarify ambiguous terms and add missing context
-4. Do NOT prescribe specific code patterns, libraries, or technical solutions
-5. Do NOT include pixel values, specific CSS properties, or implementation code
-6. Keep it outcome-focused, not implementation-focused
 
-# Good vs Bad Examples
+- ALWAYS make the output more descriptive and actionable than the input
+- Keep it natural language - no code snippets or technical implementation details
+- Preserve the user's intent - don't add features they didn't ask for
+- If genuinely vague with no clear problem, use ⚠️ **Your prompt is vague.** and offer choices
 
-BAD (too technical):
-"Add a header with 16px padding, flex display, justify-between, border-radius 8px, box-shadow 0 2px 4px rgba(0,0,0,0.1)"
-
-GOOD (outcome-focused):
-"Add a header that looks clean and modern with the logo on the left and navigation on the right. It should have subtle depth and feel polished."
-
-BAD (prescribing implementation):
-"Use useState for form state, add Zod validation schema, implement onBlur validation"
-
-GOOD (describing what's needed):
-"Make the form validate user input and show helpful error messages. It should feel responsive and prevent invalid submissions."
-
-# What to Clarify
-- What is the desired end result?
-- What should it look/feel/behave like?
-- What problem is being solved?
-- What are the constraints or requirements?
-
-# What NOT to Include
-- Specific CSS values (padding, margin, colors as hex)
-- Code patterns or architecture decisions
-- Library or framework choices
-- Step-by-step implementation instructions
-- Technical jargon the AI can figure out
-
-# Vibe-to-Outcome Mappings
-Expand vague terms to describe outcomes:
-- "premium" → Feels high-end, polished, with subtle details and smooth interactions
-- "modern" → Clean, uncluttered, with good use of whitespace and typography
-- "playful" → Fun and engaging, with personality and delightful interactions
-- "minimal" → Simple and focused, nothing unnecessary
-- "professional" → Trustworthy, organized, easy to navigate
-- "aesthetic" → Visually harmonious, balanced, pleasing to look at
-
-# Output Format
-Write a clear, natural description of what the user wants. No bullet points, no numbered lists unless the user's request has multiple distinct parts. Just describe the desired outcome clearly.`;
+Output ONLY the improved prompt. No explanations.`;
 
 /**
  * Build the prompt for Gemini
  */
-export function buildPrompt(
-    userInput: string,
-    targetModel: TargetModel | null,
-    projectContext?: ProjectContext,
-    fileContext?: FileContext
-): string {
-    const parts: string[] = [SYSTEM_PROMPT];
+export function buildPrompt(userInput: string): string {
+    const wordCount = userInput.split(/\s+/).length;
 
-    // If a target AI model is detected, mention it
-    if (targetModel) {
-        parts.push('\n---\n');
-        parts.push(`# Target AI: ${targetModel.name}`);
-        parts.push('The user will send this prompt to this AI. Keep the refined prompt clear and outcome-focused.');
+    let guidance = '';
+    if (wordCount > 50) {
+        guidance = '\n\n[Detailed request. Organize and enhance, but preserve all their content.]';
+    } else if (wordCount < 8) {
+        guidance = '\n\n[Very short. If there\'s enough context to understand the problem, expand it significantly. If truly unclear, offer choices.]';
     }
 
-    // Add project context briefly (just for awareness, not for dictating solutions)
-    if (projectContext && projectContext.framework) {
-        parts.push('\n---\n');
-        parts.push('# Context');
-        parts.push(`The user is working in a ${projectContext.framework} project.`);
-        parts.push('Do not prescribe technical solutions — the AI agent knows the tech stack.');
-    }
-
-    // Add file context if relevant
-    if (fileContext && shouldIncludeFileContext(userInput)) {
-        parts.push('\n---\n');
-        parts.push(`# Current File: ${fileContext.relativePath}`);
-        parts.push('The user is referring to this file. Help clarify what they want to change, not how.');
-    }
-
-    parts.push('\n---\n');
-    parts.push(`# User's Request\n"${userInput}"\n`);
-    parts.push('# Your Task\nRewrite this as a clear, outcome-focused prompt. Describe WHAT they want, not HOW to build it.');
-
-    return parts.join('\n');
+    return `${SYSTEM_PROMPT}${guidance}\n\nUser's request:\n"${userInput}"`;
 }
 
 /**
- * Determine if file context should be included
- */
-function shouldIncludeFileContext(userInput: string): boolean {
-    const contextKeywords = [
-        'this', 'current', 'my', 'the file', 'this file',
-        'this component', 'this function', 'this code',
-        'here', 'above', 'below', 'refactor',
-        'improve this', 'fix this', 'update this',
-    ];
-
-    const lowerInput = userInput.toLowerCase();
-    return contextKeywords.some(keyword => lowerInput.includes(keyword));
-}
-
-/**
- * Build a simple prompt without context
+ * Build a simple prompt (alias for compatibility)
  */
 export function buildSimplePrompt(userInput: string): string {
-    return buildPrompt(userInput, null);
+    return buildPrompt(userInput);
 }

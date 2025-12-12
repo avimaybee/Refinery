@@ -1,8 +1,8 @@
 {
   "name": "refinery",
   "displayName": "Refinery",
-  "description": "Refine vague ideas into production-ready prompts for AI coding agents",
-  "version": "0.1.0",
+  "description": "Refine vague ideas into Thoroughly Engineered prompts for AI coding agents",
+  "version": "0.2.0",
   "publisher": "avimaybe7",
   "license": "MIT",
   "icon": "icon.png",
@@ -44,12 +44,104 @@
             "description": "Show help and examples"
           },
           {
-            "name": "target",
-            "description": "Set target AI model (e.g., Claude, GPT-4)"
+            "name": "templates",
+            "description": "Browse prompt templates"
+          },
+          {
+            "name": "history",
+            "description": "Show refinement history"
           }
         ]
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "refinery",
+          "title": "Refinery",
+          "icon": "$(tools)"
+        }
+      ]
+    },
+    "views": {
+      "refinery": [
+        {
+          "id": "refinery.history",
+          "name": "History",
+          "icon": "$(history)",
+          "contextualTitle": "Refinement History"
+        }
+      ]
+    },
+    "walkthroughs": [
+      {
+        "id": "refinery.gettingStarted",
+        "title": "Get Started with Refinery",
+        "description": "Turn vague ideas into clear, actionable prompts",
+        "steps": [
+          {
+            "id": "refinery.step.apiKey",
+            "title": "Set Your API Key",
+            "description": "Get a free Gemini API key and configure Refinery.\n\n[Get API Key](https://aistudio.google.com/apikey)\n\n[Set API Key](command:refinery.setApiKey)",
+            "media": {
+              "image": "media/walkthrough-key.svg",
+              "altText": "API Key setup"
+            },
+            "completionEvents": [
+              "onCommand:refinery.setApiKey"
+            ]
+          },
+          {
+            "id": "refinery.step.selectModel",
+            "title": "Choose Your Model",
+            "description": "Select your preferred Gemini model.\n\n[Select Model](command:refinery.selectModel)",
+            "media": {
+              "image": "media/walkthrough-model.svg",
+              "altText": "Model selection"
+            },
+            "completionEvents": [
+              "onCommand:refinery.selectModel"
+            ]
+          },
+          {
+            "id": "refinery.step.firstRefine",
+            "title": "Refine Your First Prompt",
+            "description": "Open Copilot Chat and type:\n\n`@refine make it look better`",
+            "media": {
+              "image": "media/walkthrough-refine.svg",
+              "altText": "Refining a prompt"
+            }
+          },
+          {
+            "id": "refinery.step.choices",
+            "title": "Handle Inline Choices",
+            "description": "If your prompt is vague, you'll see options like `[option1 / option2]`.\n\nSimply delete the ones you don't want!",
+            "media": {
+              "image": "media/walkthrough-choices.svg",
+              "altText": "Inline choices"
+            }
+          },
+          {
+            "id": "refinery.step.research",
+            "title": "Built on Research",
+            "description": "Refinery uses prompt engineering techniques from Anthropic's published research.\n\n[Learn More](https://www.anthropic.com/engineering/claude-code-best-practices)",
+            "media": {
+              "image": "media/walkthrough-research.svg",
+              "altText": "Research basis"
+            }
+          }
+        ]
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "refinery.refineSelection",
+          "when": "editorHasSelection",
+          "group": "1_modification"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "refinery.setApiKey",
@@ -85,6 +177,26 @@
         "command": "refinery.refineSelection",
         "title": "Refinery: Refine Selection",
         "icon": "$(sparkle)"
+      },
+      {
+        "command": "refinery.showHistory",
+        "title": "Refinery: Show History",
+        "icon": "$(history)"
+      },
+      {
+        "command": "refinery.clearHistory",
+        "title": "Refinery: Clear History",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "refinery.copyHistoryEntry",
+        "title": "Copy Refined Prompt",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "refinery.showTemplates",
+        "title": "Refinery: Browse Templates",
+        "icon": "$(file-code)"
       }
     ],
     "keybindings": [
